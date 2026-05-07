@@ -1,13 +1,13 @@
 // Global Error Handler
-window.onerror = function(msg, url, line) {
+window.onerror = function (msg, url, line) {
     const overlay = document.getElementById('error-overlay');
     overlay.style.display = 'block';
     document.getElementById('error-msg').textContent += `Error: ${msg}\nLine: ${line}\nUrl: ${url}\n\n`;
 };
 
-const RANKS = ['2','3','4','5','6','7','8','9','T','J','Q','K','A'];
-const SUITS = ['s','h','d','c'];
-const SUIT_SYMBOLS = {s:'♠', h:'♥', d:'♦', c:'♣'};
+const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
+const SUITS = ['s', 'h', 'd', 'c'];
+const SUIT_SYMBOLS = { s: '♠', h: '♥', d: '♦', c: '♣' };
 
 let state = {
     hole: [null, null],
@@ -62,6 +62,7 @@ function init() {
                 </div>
                 <div class="chips-container" id="chips"></div>
                 <button class="btn-main" id="btn-to-flop">Deal Flop</button>
+                <div class="preflop-byline" id="preflop-byline"></div>
             `}
         `;
         wizard.appendChild(div);
@@ -131,14 +132,14 @@ function updateView() {
         if (idx === state.currentStepIndex) el.classList.add('active');
         else el.classList.remove('active');
     });
-    
+
     const currentStep = steps[state.currentStepIndex];
     if (currentStep.type === 'card') {
         renderPicker(currentStep.id);
     } else if (currentStep.type === 'players') {
         renderPlayers();
     }
-    
+
     // Update Header & Icons
     const bBtn = document.getElementById('btn-back');
     if (bBtn) {
@@ -151,7 +152,7 @@ function updateView() {
 
     // Update Theme
     document.body.className = currentStep.theme;
-    
+
     updateContexts();
     updateStreetTabs();
 }
@@ -233,14 +234,14 @@ function isCardUsed(idx) {
 }
 
 function selectCard(stepId, cardIdx) {
-    const map = { 
-        hole1: [state.hole, 0], 
-        hole2: [state.hole, 1], 
-        flop1: [state.board, 0], 
-        flop2: [state.board, 1], 
-        flop3: [state.board, 2], 
-        turn: [state.board, 3], 
-        river: [state.board, 4] 
+    const map = {
+        hole1: [state.hole, 0],
+        hole2: [state.hole, 1],
+        flop1: [state.board, 0],
+        flop2: [state.board, 1],
+        flop3: [state.board, 2],
+        turn: [state.board, 3],
+        river: [state.board, 4]
     };
     if (map[stepId]) map[stepId][0][map[stepId][1]] = cardIdx;
     updateHUD();
@@ -259,10 +260,10 @@ function prevStep() {
         // Clear the card at the current step we are moving AWAY from
         const s = steps[state.currentStepIndex];
         if (s.type === 'card') {
-            const map = { 
-                hole1: [state.hole, 0], hole2: [state.hole, 1], 
-                flop1: [state.board, 0], flop2: [state.board, 1], flop3: [state.board, 2], 
-                turn: [state.board, 3], river: [state.board, 4] 
+            const map = {
+                hole1: [state.hole, 0], hole2: [state.hole, 1],
+                flop1: [state.board, 0], flop2: [state.board, 1], flop3: [state.board, 2],
+                turn: [state.board, 3], river: [state.board, 4]
             };
             if (map[s.id]) map[s.id][0][map[s.id][1]] = null;
         }
@@ -271,6 +272,40 @@ function prevStep() {
         updateView();
         updateHUD();
     }
+}
+
+function isHighlightedHand(c1, c2) {
+    if (c1 === null || c2 === null) return false;
+    const r1 = c1 >> 2, r2 = c2 >> 2;
+    const s1 = c1 & 3, s2 = c2 & 3;
+    const hR = Math.max(r1, r2);
+    const lR = Math.min(r1, r2);
+    const suited = (s1 === s2);
+
+    // 1. Any pocket pair is playable/highlighted
+    if (hR === lR) return true;
+
+    // 2. Suited hands
+    if (suited) {
+        // Any suited Ace (Ace is rank 12)
+        if (hR === 12) return true;
+        // K9s+, Q9s+, J9s+, T9s
+        if (hR === 11 && lR >= 7) return true; // K9s, KTs, KJs, KQs
+        if (hR === 10 && lR >= 7) return true; // Q9s, QTs, QJs
+        if (hR === 9 && lR >= 7) return true;  // J9s, JTs
+        // Suited connectors & high suited one-gappers (e.g. 87s, 76s, 65s, 54s, 86s, 97s, T8s)
+        if (hR - lR === 1 && lR >= 3) return true; // Down to 54s
+        if (hR - lR === 2 && lR >= 4) return true; // Down to 64s
+    } else {
+        // 3. Offsuit hands
+        // ATo+, KTo+, QTo+, JTo
+        if (hR === 12 && lR >= 8) return true; // ATo, AJo, AQo, AKo
+        if (hR === 11 && lR >= 8) return true; // KTo, KJo, KQo
+        if (hR === 10 && lR >= 8) return true; // QTo, QJo
+        if (hR === 9 && lR === 8) return true;  // JTo
+    }
+
+    return false;
 }
 
 function updateContexts() {
@@ -305,7 +340,21 @@ function updateContexts() {
         if (holePresent) {
             const group = document.createElement('div');
             group.className = 'context-group';
-            group.innerHTML = '<span class="context-label">Hand</span>';
+
+            const bothHoleSelected = state.hole[0] !== null && state.hole[1] !== null;
+            const isPreflop = state.board.filter(c => c !== null).length === 0;
+
+            let badgeHTML = '';
+            if (bothHoleSelected && isPreflop) {
+                const highlighted = isHighlightedHand(state.hole[0], state.hole[1]);
+                if (highlighted) {
+                    badgeHTML = '<span class="badge-playable">Playable</span>';
+                } else {
+                    badgeHTML = '<span class="badge-fold">Fold</span>';
+                }
+            }
+
+            group.innerHTML = `<span class="context-label">Hand${badgeHTML}</span>`;
             const cardsDiv = document.createElement('div');
             cardsDiv.className = 'context-cards';
             state.hole.forEach((c, i) => { if (c !== null) cardsDiv.appendChild(createEl(c, true, i)); });
@@ -329,38 +378,59 @@ function updateContexts() {
             group.appendChild(cardsDiv);
             ctx.appendChild(group);
         }
+
     });
+
+    // Update pre-flop text byline below "Deal Flop" button
+    const bylineEl = document.getElementById('preflop-byline');
+    if (bylineEl) {
+        const bothHoleSelected = state.hole[0] !== null && state.hole[1] !== null;
+        const isPreflop = state.board.filter(c => c !== null).length === 0;
+
+        if (bothHoleSelected && isPreflop) {
+            const highlighted = isHighlightedHand(state.hole[0], state.hole[1]);
+            bylineEl.className = 'preflop-byline visible ' + (highlighted ? 'is-highlighted' : 'is-fold');
+            if (highlighted) {
+                bylineEl.innerHTML = 'Highlighted starting hand. Strong pre-flop potential!';
+            } else {
+                bylineEl.innerHTML = 'Weak starting hand. Highly advised to fold pre-flop.';
+            }
+        } else {
+            bylineEl.className = 'preflop-byline';
+            bylineEl.innerHTML = '';
+        }
+    }
 }
 
 // --- POKER ENGINE ---
-function score5(ca1,ca2,ca3,ca4,ca5) {
-    const cards = [ca1,ca2,ca3,ca4,ca5];
+function score5(ca1, ca2, ca3, ca4, ca5) {
+    const cards = [ca1, ca2, ca3, ca4, ca5];
     const ranks = [], suits = [];
-    for(let i=0; i<5; i++) { ranks[i] = cards[i] >> 2; suits[i] = cards[i] & 3; }
-    ranks.sort((a,b) => b-a);
+    for (let i = 0; i < 5; i++) { ranks[i] = cards[i] >> 2; suits[i] = cards[i] & 3; }
+    ranks.sort((a, b) => b - a);
     const counts = {};
-    for(let i=0; i<5; i++) counts[ranks[i]] = (counts[ranks[i]] || 0) + 1;
-    const keys = Object.keys(counts).map(Number).sort((a,b) => counts[b] === counts[a] ? b-a : counts[b]-counts[a]);
-    const isFlush = suits[0]===suits[1] && suits[0]===suits[2] && suits[0]===suits[3] && suits[0]===suits[4];
-    const isStraight = (ranks[0]-ranks[4] === 4 && new Set(ranks).size === 5) || (ranks[0]===12 && ranks[1]===3 && ranks[4]===0);
-    const sHigh = isStraight ? (ranks[0]===12 && ranks[1]===3 ? 3 : ranks[0]) : 0;
+    for (let i = 0; i < 5; i++) counts[ranks[i]] = (counts[ranks[i]] || 0) + 1;
+    const keys = Object.keys(counts).map(Number).sort((a, b) => counts[b] === counts[a] ? b - a : counts[b] - counts[a]);
+    const isFlush = suits[0] === suits[1] && suits[0] === suits[2] && suits[0] === suits[3] && suits[0] === suits[4];
+    const isStraight = (ranks[0] - ranks[4] === 4 && new Set(ranks).size === 5) || (ranks[0] === 12 && ranks[1] === 3 && ranks[4] === 0);
+    const sHigh = isStraight ? (ranks[0] === 12 && ranks[1] === 3 ? 3 : ranks[0]) : 0;
     let cat = 0, tie = 0;
     const c0 = counts[keys[0]], c1 = counts[keys[1]] || 0;
     if (isFlush && isStraight) { cat = 8e13; tie = sHigh; }
-    else if (c0 === 4) { cat = 7e13; tie = keys[0]*13 + keys[1]; }
-    else if (c0 === 3 && c1 === 2) { cat = 6e13; tie = keys[0]*13 + keys[1]; }
-    else if (isFlush) { cat = 5e13; for(let i=0; i<5; i++) tie += ranks[i]*Math.pow(13, 4-i); }
+    else if (c0 === 4) { cat = 7e13; tie = keys[0] * 13 + keys[1]; }
+    else if (c0 === 3 && c1 === 2) { cat = 6e13; tie = keys[0] * 13 + keys[1]; }
+    else if (isFlush) { cat = 5e13; for (let i = 0; i < 5; i++) tie += ranks[i] * Math.pow(13, 4 - i); }
     else if (isStraight) { cat = 4e13; tie = sHigh; }
-    else if (c0 === 3) { cat = 3e13; tie = keys[0]*169+keys[1]*13+keys[2]; }
-    else if (c0 === 2 && c1 === 2) { cat = 2e13; tie = keys[0]*169+keys[1]*13+keys[2]; }
-    else if (c0 === 2) { cat = 1e13; tie = keys[0]*2197+keys[1]*169+keys[2]*13+keys[3]; }
-    else { cat = 0; for(let i=0; i<5; i++) tie += ranks[i]*Math.pow(13, 4-i); }
+    else if (c0 === 3) { cat = 3e13; tie = keys[0] * 169 + keys[1] * 13 + keys[2]; }
+    else if (c0 === 2 && c1 === 2) { cat = 2e13; tie = keys[0] * 169 + keys[1] * 13 + keys[2]; }
+    else if (c0 === 2) { cat = 1e13; tie = keys[0] * 2197 + keys[1] * 169 + keys[2] * 13 + keys[3]; }
+    else { cat = 0; for (let i = 0; i < 5; i++) tie += ranks[i] * Math.pow(13, 4 - i); }
     return cat + tie;
 }
 
 const COMB7_5 = [];
-(function(){
-    for(let a=0;a<3;a++)for(let b=a+1;b<4;b++)for(let d=b+1;d<5;d++)for(let e=d+1;e<6;e++)for(let f=e+1;f<7;f++) COMB7_5.push([a,b,d,e,f]);
+(function () {
+    for (let a = 0; a < 3; a++)for (let b = a + 1; b < 4; b++)for (let d = b + 1; d < 5; d++)for (let e = d + 1; e < 6; e++)for (let f = e + 1; f < 7; f++) COMB7_5.push([a, b, d, e, f]);
 })();
 
 function getBestArr(c) {
@@ -368,14 +438,14 @@ function getBestArr(c) {
     if (c.length === 5) return score5(...c);
     if (c.length === 6) {
         let max = 0;
-        for(let i=0; i<6; i++) {
+        for (let i = 0; i < 6; i++) {
             const copy = [...c]; copy.splice(i, 1);
             max = Math.max(max, score5(...copy));
         }
         return max;
     }
     let max = 0;
-    for(let i=0; i<21; i++) {
+    for (let i = 0; i < 21; i++) {
         const comb = COMB7_5[i];
         const s = score5(c[comb[0]], c[comb[1]], c[comb[2]], c[comb[3]], c[comb[4]]);
         if (s > max) max = s;
@@ -397,7 +467,7 @@ function updateHUD() {
             const known = new Set([...h, ...b]);
             const curMax = bestScore;
             let outs = [];
-            for(let i=0; i<52; i++) {
+            for (let i = 0; i < 52; i++) {
                 if (known.has(i)) continue;
                 if (getBestArr([...current, i]) > curMax) outs.push(i);
             }
@@ -412,8 +482,8 @@ function updateHUD() {
                 outs.forEach(o => {
                     const badge = document.createElement('div');
                     badge.className = 'out-badge';
-                    if ((o&3)===1 || (o&3)===2) badge.classList.add('red');
-                    badge.textContent = RANKS[o>>2] + SUIT_SYMBOLS[SUITS[o&3]];
+                    if ((o & 3) === 1 || (o & 3) === 2) badge.classList.add('red');
+                    badge.textContent = RANKS[o >> 2] + SUIT_SYMBOLS[SUITS[o & 3]];
                     outsPanel.appendChild(badge);
                 });
             }
@@ -451,7 +521,7 @@ function updateAnalysis() {
 
     const h = state.hole.filter(c => c !== null);
     const b = state.board.filter(c => c !== null);
-    
+
     if (h.length < 2) {
         container.innerHTML = '<div class="analysis-placeholder">Complete your hand to see analysis</div>';
         return;
@@ -483,7 +553,7 @@ function updateAnalysis() {
         for (let j = i + 1; j < deck.length; j++) {
             const opH = [deck[i], deck[j]];
             const opBest = getBestArr([...opH, ...b]);
-            
+
             if (opBest > myBest) {
                 totalBeatingHands++;
                 for (const cat of categories) {
@@ -526,7 +596,7 @@ function updateAnalysis() {
         const data = results[cat.name];
         const item = document.createElement('div');
         item.className = 'better-hand-item';
-        
+
         const info = document.createElement('div');
         info.className = 'better-hand-info';
         info.innerHTML = `
@@ -536,7 +606,7 @@ function updateAnalysis() {
             </div>
             <span class="better-hand-desc">${data.count} possible combinations</span>
         `;
-        
+
         const cardsDiv = document.createElement('div');
         cardsDiv.className = 'better-hand-cards';
         data.hand.forEach(c => {
@@ -568,23 +638,23 @@ function getHandName(s) {
 function runSimulation() {
     const h = state.hole.filter(c => c !== null);
     const b = state.board.filter(c => c !== null);
-    if (h.length < 2) return { win:0 };
+    if (h.length < 2) return { win: 0 };
     const opCount = state.playerCount - 1 - state.folded.length;
     const deck = [];
     const known = new Set([...h, ...b]);
-    for(let i=0; i<52; i++) if(!known.has(i)) deck.push(i);
+    for (let i = 0; i < 52; i++) if (!known.has(i)) deck.push(i);
     let wins = 0, ties = 0, iterations = 1500;
-    for(let i=0; i<iterations; i++) {
+    for (let i = 0; i < iterations; i++) {
         const d = [...deck];
         for (let j = d.length - 1; j > 0; j--) {
             const k = Math.floor(Math.random() * (j + 1));
             const tmp = d[j]; d[j] = d[k]; d[k] = tmp;
         }
         const sb = [...b];
-        while(sb.length < 5) sb.push(d.pop());
+        while (sb.length < 5) sb.push(d.pop());
         const myBest = getBestArr([...h, ...sb]);
         let lose = false, tie = false;
-        for(let p=0; p<opCount; p++) {
+        for (let p = 0; p < opCount; p++) {
             const opH = [d.pop(), d.pop()];
             const opBest = getBestArr([...opH, ...sb]);
             if (opBest > myBest) { lose = true; break; }
@@ -592,7 +662,7 @@ function runSimulation() {
         }
         if (!lose) { if (tie) ties++; else wins++; }
     }
-    return { win: wins/iterations + (ties/iterations)*0.5 };
+    return { win: wins / iterations + (ties / iterations) * 0.5 };
 }
 
 init();

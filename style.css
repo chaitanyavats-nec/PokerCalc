@@ -25,12 +25,13 @@
     -webkit-tap-highlight-color: transparent;
     -webkit-user-select: none;
     user-select: none;
+    font-family: inherit;
 }
 
 body {
     margin: 0;
     padding: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    font-family: 'Gotham', 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
     overflow-x: hidden;
@@ -563,7 +564,7 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .better-hand-info {
@@ -625,10 +626,74 @@ header {
 }
 
 @keyframes bounce {
-    0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
-    40% { transform: translateY(-6px); }
-    60% { transform: translateY(-3px); }
+
+    0%,
+    20%,
+    50%,
+    80%,
+    100% {
+        transform: translateY(0);
+    }
+
+    40% {
+        transform: translateY(-6px);
+    }
+
+    60% {
+        transform: translateY(-3px);
+    }
 }
+
+/* Pre-flop Advice Byline & Badges */
+.preflop-byline {
+    font-size: 11px;
+    font-weight: 500;
+    text-align: center;
+    margin-top: 10px;
+    opacity: 0;
+    transform: translateY(5px);
+    transition: all 0.3s ease;
+}
+
+.preflop-byline.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.preflop-byline.is-highlighted {
+    color: var(--green);
+}
+
+.preflop-byline.is-fold {
+    color: var(--red);
+}
+
+/* Badge Styling */
+.badge-playable,
+.badge-fold {
+    font-size: 8px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+    display: inline-block;
+}
+
+.badge-playable {
+    background: rgba(75, 186, 142, 0.15);
+    color: var(--green);
+    border: 1px solid rgba(75, 186, 142, 0.3);
+}
+
+.badge-fold {
+    background: rgba(217, 107, 104, 0.15);
+    color: var(--red);
+    border: 1px solid rgba(217, 107, 104, 0.3);
+}
+
 
 #error-overlay {
     position: fixed;
